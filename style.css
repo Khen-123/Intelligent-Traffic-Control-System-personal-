@@ -90,16 +90,19 @@ header p {
 }
 
 .ped-icon {
-  font-size: 2.25rem;
-  line-height: 1;
-  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.6));
-  transform: translateZ(0);
-  opacity: 0.35;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid #334155;
+  background: #0f172a;
+  color: transparent;
+  box-shadow: inset 0 0 0 2px #0b1220;
+  opacity: 0.9;
 }
 
 .ped-icon.walking {
-  opacity: 1;
-  animation: ped-walk 0.55s ease-in-out infinite;
+  background: radial-gradient(circle at 30% 30%, #86efac, #16a34a);
+  box-shadow: 0 0 16px rgba(34, 197, 94, 0.6);
 }
 
 .ped-status {
@@ -129,6 +132,41 @@ header p {
   padding: 4px 10px;
   min-width: 44px;
   text-align: center;
+}
+
+.ped-timer.is-hidden {
+  visibility: hidden;
+}
+
+.ped-lights {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ped-bulb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid #1f2937;
+}
+
+.ped-red {
+  background: #3d1a1a;
+}
+
+.ped-green {
+  background: #0d2b1a;
+}
+
+.ped-red.active {
+  background: #ef4444;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.7);
+}
+
+.ped-green.active {
+  background: #22c55e;
+  box-shadow: 0 0 14px rgba(34, 197, 94, 0.7);
 }
 
 @keyframes ped-walk {
@@ -220,6 +258,171 @@ header p {
   text-align: center;
 }
 
+/* ─── MOVEMENT ZONE (Cars + Pedestrians) ────────────────────── */
+.movement-zone {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.road-strip,
+.crosswalk-strip {
+  position: relative;
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.road-strip {
+  height: 64px;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      #4b5563 0 22px,
+      #6b7280 22px 44px
+    );
+  border: 1px solid #374151;
+}
+
+.road-strip::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  border-top: 2px dashed rgba(255, 255, 255, 0.35);
+  transform: translateY(-50%);
+}
+
+.ns-road-strip::after {
+  border-top-color: rgba(251, 191, 36, 0.45);
+}
+
+.road-label {
+  position: absolute;
+  top: 6px;
+  left: 10px;
+  z-index: 3;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: #cbd5e1;
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid #334155;
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+
+.crosswalk-strip {
+  height: 52px;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      #e5e7eb 0 16px,
+      #9ca3af 16px 24px
+    );
+  border: 1px solid #64748b;
+}
+
+.car {
+  position: absolute;
+  width: 44px;
+  height: 24px;
+  border-radius: 6px;
+  top: 29px;
+  left: -60px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+  will-change: transform;
+}
+
+.car::before,
+.car::after {
+  content: "";
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  background: #111827;
+  border-radius: 50%;
+  bottom: -4px;
+}
+
+.car::before { left: 6px; }
+.car::after  { right: 6px; }
+
+.car-ns {
+  background: #22d3ee;
+}
+
+.car-ew {
+  background: #f97316;
+}
+
+.car.alt {
+  opacity: 0.75;
+}
+
+.pedestrian-mover {
+  position: absolute;
+  top: 18px;
+  left: -34px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #1f2937;
+  border: 1px solid #475569;
+  opacity: 0.45;
+  transition: opacity 0.25s ease-in-out;
+}
+
+.pedestrian-mover.walking {
+  opacity: 1;
+  background: radial-gradient(circle at 30% 30%, #86efac, #16a34a);
+  border-color: #16a34a;
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+}
+
+.pedestrian-mover.alt {
+  top: 12px;
+}
+
+.pedestrian-mover.alt-two {
+  top: 24px;
+}
+
+.ped-label {
+  top: 4px;
+}
+
+.transition-delay-row {
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.transition-delay-row label {
+  font-size: 0.72rem;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.transition-delay-row input[type="number"] {
+  width: 110px;
+  padding: 7px 10px;
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  color: #e5e7eb;
+  font-size: 0.82rem;
+}
+
+.transition-delay-row input[type="number"]:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
 /* ─── CONTROLS PANEL ────────────────────────────────────────── */
 .controls-panel {
   width: 100%;
@@ -260,6 +463,7 @@ header p {
 
 input[type="range"].mode-slider {
   -webkit-appearance: none;
+  appearance: none;
   width: 120px;
   height: 6px;
   border-radius: 3px;
@@ -453,6 +657,50 @@ footer {
 
 footer span {
   color: #6b7280;
+}
+
+/* ─── RESPONSIVE ─────────────────────────────────────────────── */
+@media (max-width: 980px) {
+  .main-content {
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .simulation-panel,
+  .log-panel {
+    width: 100%;
+  }
+
+  .simulation-panel {
+    border-right: none;
+    border-bottom: 2px solid #2d3748;
+  }
+
+  footer {
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .intersection-container {
+    gap: 24px;
+  }
+
+  .light {
+    width: 52px;
+    height: 52px;
+  }
+
+  .road-strip {
+    height: 66px;
+  }
+
+  .car {
+    width: 36px;
+    height: 20px;
+  }
 }
 
 /* ─── SCROLLBAR ──────────────────────────────────────────────── */

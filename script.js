@@ -15,6 +15,11 @@ const State = {
   timedTimeout: null,   // holds the setTimeout reference for timed mode
   pendingPedestrian: false, // true when a pedestrian crossing has been requested
   pedInterval: null,    // interval used for pedestrian countdown UI
+  movementRaf: null,    // requestAnimationFrame id
+  lastFrameTime: 0,     // previous timestamp in movement loop
+  ewOffset: 0,
+  nsOffset: 0,
+  pedOffset: 0,
 };
 
 /* ─────────────────────────────────────────────────────────────
@@ -62,6 +67,95 @@ const pedSignal      = $('ped-signal');
 const pedIcon        = $('ped-icon');
 const pedStatus      = $('ped-status');
 const pedTimer       = $('ped-timer');
+const pedRedLight = $('ped-red-light');
+const pedGreenLight = $('ped-green-light');
+const transitionDelayInput = $('transition-delay');
+const roadEwStrip = $('road-ew-strip');
+const roadNsStrip = $('road-ns-strip');
+const carNs1 = $('car-ns-1');
+const carNs2 = $('car-ns-2');
+const carEw1 = $('car-ew-1');
+const carEw2 = $('car-ew-2');
+const ped1 = $('ped-1');
+const ped2 = $('ped-2');
+const ped3 = $('ped-3');
+
+function getTransitionDelaySeconds() {
+  const value = parseFloat(transitionDelayInput && transitionDelayInput.value);
+  const safeValue = Number.isFinite(value) ? value : 1.5;
+  return Math.min(10, Math.max(0.5, safeValue));
+}
+
+function getLaneSpeed(state) {
+  if (state === 'go') return 3.2;
+  if (state === 'warning') return 1.2;
+  return 0;
+}
+
+function wrap(value, max) {
+  if (max <= 0) return value;
+  return ((value % max) + max) % max;
+}
+
+function renderMovers(deltaMs) {
+  if (!roadEwStrip || !roadNsStrip) return;
+  const ewWidth = roadEwStrip.clientWidth || 700;
+  const nsWidth = roadNsStrip.clientWidth || 700;
+  const pedWrap = ewWidth + 120;
+  const nsSpeed = getLaneSpeed(State.ns);
+  const ewSpeed = getLaneSpeed(State.ew);
+  const pedWalk = pedStatus && pedStatus.textContent === 'WALK';
+  const pedSpeed = pedWalk ? 1.8 : 0;
+
+  const frameScale = deltaMs / 16.6667;
+  State.ewOffset += ewSpeed * frameScale;
+  State.nsOffset += nsSpeed * frameScale;
+  State.pedOffset += pedSpeed * frameScale;
+
+  const ewCycle = ewWidth + 180;
+  const nsCycle = nsWidth + 180;
+  const pedCycle = pedWrap + 90;
+
+  const ew1X = wrap(State.ewOffset + 0, ewCycle) - 80;
+  const ew2X = wrap(State.ewOffset - (ewCycle / 2), ewCycle) - 80;
+  const ns1X = wrap(State.nsOffset + 0, nsCycle) - 80;
+  const ns2X = wrap(State.nsOffset - (nsCycle / 2), nsCycle) - 80;
+  const p1X = wrap(State.pedOffset + 0, pedCycle) - 24;
+  const p2X = wrap(State.pedOffset - 80, pedCycle) - 24;
+  const p3X = wrap(State.pedOffset - 160, pedCycle) - 24;
+
+  if (carNs1) carNs1.style.transform = 'translateX(' + ns1X + 'px)';
+  if (carNs2) carNs2.style.transform = 'translateX(' + ns2X + 'px)';
+  if (carEw1) carEw1.style.transform = 'translateX(' + ew1X + 'px)';
+  if (carEw2) carEw2.style.transform = 'translateX(' + ew2X + 'px)';
+  if (ped1) ped1.style.transform = 'translateX(' + p1X + 'px)';
+  if (ped2) ped2.style.transform = 'translateX(' + p2X + 'px)';
+  if (ped3) ped3.style.transform = 'translateX(' + p3X + 'px)';
+
+  if (ped1) ped1.classList.toggle('walking', pedWalk);
+  if (ped2) ped2.classList.toggle('walking', pedWalk);
+  if (ped3) ped3.classList.toggle('walking', pedWalk);
+}
+
+function startMovementLoop() {
+  if (State.movementRaf) {
+    cancelAnimationFrame(State.movementRaf);
+  }
+
+  function tick(timestamp) {
+    if (!State.lastFrameTime) {
+      State.lastFrameTime = timestamp;
+    }
+
+    const deltaMs = Math.min(40, timestamp - State.lastFrameTime);
+    State.lastFrameTime = timestamp;
+    renderMovers(deltaMs);
+    State.movementRaf = requestAnimationFrame(tick);
+  }
+
+  State.lastFrameTime = 0;
+  State.movementRaf = requestAnimationFrame(tick);
+}
 
 function setPedestrianSignal(isWalk, secondsRemaining) {
   if (!pedStatus || !pedIcon || !pedTimer) return;
@@ -71,11 +165,18 @@ function setPedestrianSignal(isWalk, secondsRemaining) {
   pedStatus.classList.toggle('stop', !isWalk);
 
   const safeSeconds = Math.max(0, Number(secondsRemaining) || 0);
-  pedTimer.textContent = String(safeSeconds);
+  pedTimer.textContent = safeSeconds > 0 ? String(safeSeconds) : '';
+  pedTimer.classList.toggle('is-hidden', safeSeconds === 0);
 
   // Start the "walking" animation when the timer is close to zero
   const shouldAnimate = isWalk && safeSeconds <= 2 && safeSeconds > 0;
   pedIcon.classList.toggle('walking', shouldAnimate);
+  if (pedRedLight) pedRedLight.classList.toggle('active', !isWalk);
+  if (pedGreenLight) pedGreenLight.classList.toggle('active', isWalk);
+
+  if (ped1) ped1.classList.toggle('walking', isWalk);
+  if (ped2) ped2.classList.toggle('walking', isWalk);
+  if (ped3) ped3.classList.toggle('walking', isWalk);
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -117,6 +218,15 @@ function renderLight(lights, stateText, state) {
 function renderAll() {
   renderLight(nsLights, nsStateText, State.ns);
   renderLight(ewLights, ewStateText, State.ew);
+
+  // Keep pedestrian signal automatically synced with E–W red by default.
+  if (!State.pendingPedestrian && !State.pedInterval) {
+    if (State.ew === 'stop') {
+      setPedestrianSignal(true, 0);
+    } else {
+      setPedestrianSignal(false, 0);
+    }
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -167,6 +277,8 @@ function runManualTransition(callback) {
   const waitingLane = activeIsNS ? 'E–W' : 'N–S';
 
   log('🔄 Transition triggered — ' + activeLane + ' going to WARNING', 'warning');
+  const yellowMs = Math.round(getTransitionDelaySeconds() * 1000);
+  const redSwapMs = Math.max(400, Math.round(yellowMs * 0.4));
 
   // Step 1: Active lane → WARNING
   if (activeIsNS) {
@@ -261,8 +373,8 @@ function runManualTransition(callback) {
         btnPedestrian.disabled = false;
       }
 
-    }, 600);
-  }, 1500);
+    }, redSwapMs);
+  }, yellowMs);
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -377,6 +489,14 @@ btnClearLog.addEventListener('click', function () {
   logContainer.innerHTML = '';
 });
 
+if (transitionDelayInput) {
+  transitionDelayInput.addEventListener('change', function () {
+    const fixed = getTransitionDelaySeconds();
+    transitionDelayInput.value = String(fixed);
+    log('⏲ Transition delay set to ' + fixed + 's', 'info');
+  });
+}
+
 /* ─────────────────────────────────────────────────────────────
    INIT
    Run when the page first loads — render the initial state.
@@ -385,3 +505,4 @@ renderAll();
 log('🚦 Traffic Simulator initialized', 'info');
 log('N–S: STOP | E–W: GO', 'success');
 setPedestrianSignal(false, 0);
+startMovementLoop();

@@ -56,7 +56,11 @@
           </figure>
 
           <figure class="ped-signal" id="ped-signal" aria-label="Pedestrian signal">
-            <div class="ped-icon" id="ped-icon" aria-hidden="true">🚶</div>
+            <div class="ped-lights" aria-hidden="true">
+              <div class="ped-bulb ped-red" id="ped-red-light"></div>
+              <div class="ped-bulb ped-green" id="ped-green-light"></div>
+            </div>
+            <div class="ped-icon" id="ped-icon" aria-hidden="true">◉</div>
             <div class="ped-status" id="ped-status">DON'T WALK</div>
             <div class="ped-timer" id="ped-timer" aria-hidden="true">0</div>
           </figure>
@@ -64,9 +68,34 @@
 
       </section><!-- /intersection-container -->
 
+      <!-- Moving Visual Simulation (added below lights, keeps existing layout intact) -->
+      <section class="movement-zone" aria-label="Traffic and pedestrian movement simulation">
+        <div class="road-strip" id="road-ew-strip">
+          <span class="road-label">E–W Road</span>
+          <div class="car car-ew" id="car-ew-1" aria-hidden="true"></div>
+          <div class="car car-ew alt" id="car-ew-2" aria-hidden="true"></div>
+        </div>
+        <div class="road-strip ns-road-strip" id="road-ns-strip">
+          <span class="road-label">N–S Road</span>
+          <div class="car car-ns" id="car-ns-1" aria-hidden="true"></div>
+          <div class="car car-ns alt" id="car-ns-2" aria-hidden="true"></div>
+        </div>
+        <div class="crosswalk-strip" id="crosswalk-strip">
+          <span class="road-label ped-label">Pedestrian Crossing (within E–W road)</span>
+          <div class="pedestrian-mover" id="ped-1" aria-hidden="true"></div>
+          <div class="pedestrian-mover alt" id="ped-2" aria-hidden="true"></div>
+          <div class="pedestrian-mover alt-two" id="ped-3" aria-hidden="true"></div>
+        </div>
+      </section>
+
       <!-- Controls Panel -->
       <section class="controls-panel">
         <h3>⚙ Controls</h3>
+
+        <fieldset class="control-group transition-delay-row">
+          <label for="transition-delay">Transition Delay (sec)</label>
+          <input type="number" id="transition-delay" value="1.5" min="0.5" max="10" step="0.1" />
+        </fieldset>
 
         <!-- Mode Toggle Slider -->
         <fieldset class="mode-toggle-row">

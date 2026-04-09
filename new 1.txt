@@ -1,0 +1,4 @@
+Notes to keep in mind: Web development 
+merge the github repo to one of our 3 repos
+create the intelligent t raffic system in one repo  separate using branches
+
