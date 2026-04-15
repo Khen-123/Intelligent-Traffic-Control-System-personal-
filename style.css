@@ -122,6 +122,10 @@ header p {
   color: #ef4444;
 }
 
+.ped-status.warning {
+  color: #eab308;
+}
+
 .ped-timer {
   font-size: 0.9rem;
   font-weight: 800;
@@ -187,6 +191,57 @@ header p {
   flex-direction: column;
   align-items: center;
   gap: 10px;
+}
+
+.countdown-box {
+  min-width: 122px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #334155;
+  background: #0f172a;
+  text-align: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.countdown-label {
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #ef4444;
+}
+
+.countdown-value {
+  font-size: 1.35rem;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #ef4444;
+}
+
+.countdown-caption {
+  font-size: 0.64rem;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #9ca3af;
+}
+
+.countdown-box.state-go .countdown-label,
+.countdown-box.state-go .countdown-value {
+  color: #22c55e;
+}
+
+.countdown-box.state-warning .countdown-label,
+.countdown-box.state-warning .countdown-value {
+  color: #eab308;
+}
+
+.countdown-box.state-stop .countdown-label,
+.countdown-box.state-stop .countdown-value {
+  color: #ef4444;
+}
+
+.ped-countdown {
+  width: 100%;
 }
 
 .lane-label {
@@ -323,6 +378,37 @@ header p {
       #9ca3af 16px 24px
     );
   border: 1px solid #64748b;
+}
+
+.crosswalk-phase-label {
+  position: absolute;
+  right: 10px;
+  top: 6px;
+  z-index: 4;
+  font-size: 0.65rem;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: #fca5a5;
+  background: rgba(15, 23, 42, 0.88);
+  border: 1px solid #7f1d1d;
+  border-radius: 999px;
+  padding: 3px 8px;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.crosswalk-phase-label.state-go {
+  color: #86efac;
+  border-color: #166534;
+}
+
+.crosswalk-phase-label.state-warning {
+  color: #fde68a;
+  border-color: #92400e;
+}
+
+.crosswalk-phase-label.state-stop {
+  color: #fca5a5;
+  border-color: #7f1d1d;
 }
 
 .car {

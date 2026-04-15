@@ -20,6 +20,13 @@ const State = {
   ewOffset: 0,
   nsOffset: 0,
   pedOffset: 0,
+  phaseEndAt: 0,
+  countdownInterval: null,
+  timedPedPhase: 'stop', // 'go' | 'warning' | 'stop'
+  timedPedRequested: false,
+  timedPedPhaseTimeout: null,
+  timedPedCountdownInterval: null,
+  timedPedPhaseEndAt: 0,
 };
 
 /* ─────────────────────────────────────────────────────────────
@@ -59,6 +66,8 @@ const btnStartTimed  = $('btn-start-timed');
 const btnStopTimed   = $('btn-stop-timed');
 const nsTimeInput    = $('ns-time');
 const ewTimeInput    = $('ew-time');
+const pedTimeInput   = $('ped-time');
+const clearanceTimeInput = $('clearance-time');
 const logContainer   = $('log-container');
 const btnClearLog    = $('btn-clear-log');
 const labelManual    = $('label-manual');
@@ -79,11 +88,142 @@ const carEw2 = $('car-ew-2');
 const ped1 = $('ped-1');
 const ped2 = $('ped-2');
 const ped3 = $('ped-3');
+const nsCountdownBox = $('ns-countdown-box');
+const nsCountdownLabel = $('ns-countdown-label');
+const nsCountdownValue = $('ns-countdown-value');
+const nsCountdownCaption = $('ns-countdown-caption');
+const ewCountdownBox = $('ew-countdown-box');
+const ewCountdownLabel = $('ew-countdown-label');
+const ewCountdownValue = $('ew-countdown-value');
+const ewCountdownCaption = $('ew-countdown-caption');
+const pedCountdownBox = $('ped-countdown-box');
+const pedCountdownLabel = $('ped-countdown-label');
+const pedCountdownValue = $('ped-countdown-value');
+const pedCountdownCaption = $('ped-countdown-caption');
+const crosswalkPhaseLabel = $('crosswalk-phase-label');
 
 function getTransitionDelaySeconds() {
   const value = parseFloat(transitionDelayInput && transitionDelayInput.value);
   const safeValue = Number.isFinite(value) ? value : 1.5;
   return Math.min(10, Math.max(0.5, safeValue));
+}
+
+function getBoundedSeconds(input, fallback, min, max) {
+  const parsed = parseFloat(input && input.value);
+  const safe = Number.isFinite(parsed) ? parsed : fallback;
+  const bounded = Math.max(min, Math.min(max, safe));
+  if (input) {
+    input.value = String(bounded);
+  }
+  return bounded;
+}
+
+function getTimedSettings() {
+  return {
+    nsSeconds: getBoundedSeconds(nsTimeInput, 10, 3, 180),
+    ewSeconds: getBoundedSeconds(ewTimeInput, 7, 3, 180),
+    pedestrianSeconds: getBoundedSeconds(pedTimeInput, 5, 2, 90),
+    clearanceSeconds: getBoundedSeconds(clearanceTimeInput, 2, 0.5, 30),
+  };
+}
+
+function setCountdownUI(box, labelEl, valueEl, captionEl, state, label, value, caption) {
+  if (!box || !labelEl || !valueEl || !captionEl) return;
+  box.classList.remove('state-go', 'state-warning', 'state-stop');
+  box.classList.add(
+    state === 'go' ? 'state-go' : (state === 'warning' ? 'state-warning' : 'state-stop')
+  );
+  labelEl.textContent = label;
+  valueEl.textContent = String(Math.max(0, Math.ceil(value)));
+  captionEl.textContent = caption;
+}
+
+function renderVehicleCountdowns(remainingSeconds) {
+  const nsLabel = State.ns === 'go' ? 'GREEN' : (State.ns === 'warning' ? 'YELLOW' : 'RED');
+  const ewLabel = State.ew === 'go' ? 'GREEN' : (State.ew === 'warning' ? 'YELLOW' : 'RED');
+  const nsCaption = State.ns === 'go' ? 'Switching soon' : (State.ns === 'warning' ? 'Prepare to stop' : 'Until green');
+  const ewCaption = State.ew === 'go' ? 'Switching soon' : (State.ew === 'warning' ? 'Prepare to stop' : 'Until green');
+  setCountdownUI(nsCountdownBox, nsCountdownLabel, nsCountdownValue, nsCountdownCaption, State.ns, nsLabel, remainingSeconds, nsCaption);
+  setCountdownUI(ewCountdownBox, ewCountdownLabel, ewCountdownValue, ewCountdownCaption, State.ew, ewLabel, remainingSeconds, ewCaption);
+}
+
+function setPhaseCountdown(seconds) {
+  clearInterval(State.countdownInterval);
+  State.phaseEndAt = Date.now() + (Math.max(0, seconds) * 1000);
+  renderVehicleCountdowns(seconds);
+  State.countdownInterval = setInterval(function () {
+    const remaining = Math.max(0, (State.phaseEndAt - Date.now()) / 1000);
+    renderVehicleCountdowns(remaining);
+    if (remaining <= 0.02) {
+      clearInterval(State.countdownInterval);
+      State.countdownInterval = null;
+    }
+  }, 200);
+}
+
+function clearTimedPedestrianTimers() {
+  clearTimeout(State.timedPedPhaseTimeout);
+  clearInterval(State.timedPedCountdownInterval);
+  State.timedPedPhaseTimeout = null;
+  State.timedPedCountdownInterval = null;
+  State.timedPedPhaseEndAt = 0;
+}
+
+function getTimedPedestrianPhaseDurations(settings) {
+  const baseStop = Math.max(3, settings.nsSeconds + settings.ewSeconds);
+  return {
+    go: settings.pedestrianSeconds,
+    warning: Math.max(1, settings.clearanceSeconds),
+    stop: State.timedPedRequested ? Math.min(4, baseStop) : baseStop,
+  };
+}
+
+function updateTimedPedPhase(phase, remainingSeconds) {
+  const safeRemaining = Math.max(0, remainingSeconds);
+  if (phase === 'go') {
+    setPedestrianSignal(true, safeRemaining, 'go');
+    return;
+  }
+  if (phase === 'warning') {
+    setPedestrianSignal(false, safeRemaining, 'warning');
+    return;
+  }
+  setPedestrianSignal(false, safeRemaining, 'stop');
+}
+
+function runTimedPedestrianCycle(settings, forcedPhase) {
+  if (State.mode !== 'timed') return;
+  const phaseDurations = getTimedPedestrianPhaseDurations(settings);
+  const phase = forcedPhase || State.timedPedPhase || 'stop';
+  const duration = phaseDurations[phase] || phaseDurations.stop;
+  State.timedPedPhase = phase;
+  State.timedPedPhaseEndAt = Date.now() + (duration * 1000);
+
+  clearInterval(State.timedPedCountdownInterval);
+  updateTimedPedPhase(phase, duration);
+  State.timedPedCountdownInterval = setInterval(function () {
+    const remaining = Math.max(0, (State.timedPedPhaseEndAt - Date.now()) / 1000);
+    updateTimedPedPhase(phase, remaining);
+    if (remaining <= 0.02) {
+      clearInterval(State.timedPedCountdownInterval);
+      State.timedPedCountdownInterval = null;
+    }
+  }, 200);
+
+  clearTimeout(State.timedPedPhaseTimeout);
+  State.timedPedPhaseTimeout = setTimeout(function () {
+    let nextPhase = 'stop';
+    if (phase === 'stop') {
+      nextPhase = 'go';
+      State.timedPedRequested = false;
+      if (btnPedestrian) btnPedestrian.disabled = false;
+    } else if (phase === 'go') {
+      nextPhase = 'warning';
+    } else if (phase === 'warning') {
+      nextPhase = 'stop';
+    }
+    runTimedPedestrianCycle(settings, nextPhase);
+  }, duration * 1000);
 }
 
 function getLaneSpeed(state) {
@@ -157,26 +297,67 @@ function startMovementLoop() {
   State.movementRaf = requestAnimationFrame(tick);
 }
 
-function setPedestrianSignal(isWalk, secondsRemaining) {
+function setPedestrianSignal(isWalk, secondsRemaining, pedPhase) {
   if (!pedStatus || !pedIcon || !pedTimer) return;
 
-  pedStatus.textContent = isWalk ? 'WALK' : "DON'T WALK";
-  pedStatus.classList.toggle('walk', isWalk);
-  pedStatus.classList.toggle('stop', !isWalk);
+  const phase = pedPhase || (isWalk ? 'go' : 'stop');
+  pedStatus.classList.remove('walk', 'stop', 'warning');
+  if (phase === 'warning') {
+    pedStatus.textContent = 'CLEAR';
+    pedStatus.classList.add('warning');
+  } else if (phase === 'go') {
+    pedStatus.textContent = 'WALK';
+    pedStatus.classList.add('walk');
+  } else {
+    pedStatus.textContent = "DON'T WALK";
+    pedStatus.classList.add('stop');
+  }
 
   const safeSeconds = Math.max(0, Number(secondsRemaining) || 0);
   pedTimer.textContent = safeSeconds > 0 ? String(safeSeconds) : '';
   pedTimer.classList.toggle('is-hidden', safeSeconds === 0);
 
   // Start the "walking" animation when the timer is close to zero
-  const shouldAnimate = isWalk && safeSeconds <= 2 && safeSeconds > 0;
+  const shouldAnimate = phase === 'go' && safeSeconds <= 2 && safeSeconds > 0;
   pedIcon.classList.toggle('walking', shouldAnimate);
-  if (pedRedLight) pedRedLight.classList.toggle('active', !isWalk);
-  if (pedGreenLight) pedGreenLight.classList.toggle('active', isWalk);
+  if (pedRedLight) pedRedLight.classList.toggle('active', phase !== 'go');
+  if (pedGreenLight) pedGreenLight.classList.toggle('active', phase === 'go');
 
-  if (ped1) ped1.classList.toggle('walking', isWalk);
-  if (ped2) ped2.classList.toggle('walking', isWalk);
-  if (ped3) ped3.classList.toggle('walking', isWalk);
+  if (ped1) ped1.classList.toggle('walking', phase === 'go');
+  if (ped2) ped2.classList.toggle('walking', phase === 'go');
+  if (ped3) ped3.classList.toggle('walking', phase === 'go');
+
+  const pedState = phase === 'go' ? 'go' : (phase === 'warning' ? 'warning' : 'stop');
+  const pedLabel = phase === 'go' ? 'GREEN' : (phase === 'warning' ? 'YELLOW' : 'RED');
+  const pedCaption = phase === 'go'
+    ? 'Cross now'
+    : (phase === 'warning'
+      ? 'Finish crossing'
+      : (State.timedPedRequested ? 'Queued request' : 'Wait'));
+  setCountdownUI(
+    pedCountdownBox,
+    pedCountdownLabel,
+    pedCountdownValue,
+    pedCountdownCaption,
+    pedState,
+    pedLabel,
+    safeSeconds,
+    pedCaption
+  );
+
+  if (crosswalkPhaseLabel) {
+    crosswalkPhaseLabel.classList.remove('state-go', 'state-warning', 'state-stop');
+    crosswalkPhaseLabel.classList.add(
+      phase === 'go' ? 'state-go' : (phase === 'warning' ? 'state-warning' : 'state-stop')
+    );
+    if (phase === 'go') {
+      crosswalkPhaseLabel.textContent = 'Section: Intersection Crosswalk - GREEN (Walk)';
+    } else if (phase === 'warning') {
+      crosswalkPhaseLabel.textContent = 'Section: Intersection Crosswalk - YELLOW (Clear)';
+    } else {
+      crosswalkPhaseLabel.textContent = 'Section: Intersection Crosswalk - RED (Wait)';
+    }
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -218,9 +399,12 @@ function renderLight(lights, stateText, state) {
 function renderAll() {
   renderLight(nsLights, nsStateText, State.ns);
   renderLight(ewLights, ewStateText, State.ew);
+  if (State.mode !== 'timed' && !State.transitioning) {
+    renderVehicleCountdowns(0);
+  }
 
-  // Keep pedestrian signal automatically synced with E–W red by default.
-  if (!State.pendingPedestrian && !State.pedInterval) {
+  // In manual mode, keep pedestrian signal synced with E–W red by default.
+  if (State.mode !== 'timed' && !State.pendingPedestrian && !State.pedInterval) {
     if (State.ew === 'stop') {
       setPedestrianSignal(true, 0);
     } else {
@@ -264,7 +448,7 @@ function log(message, type = 'info') {
    Parameters:
      callback — optional function to call when transition is done
 ───────────────────────────────────────────────────────────── */
-function runManualTransition(callback) {
+function runManualTransition(callback, options) {
   // Don't start a new transition if one is already running
   if (State.transitioning) return;
 
@@ -278,7 +462,10 @@ function runManualTransition(callback) {
 
   log('🔄 Transition triggered — ' + activeLane + ' going to WARNING', 'warning');
   const yellowMs = Math.round(getTransitionDelaySeconds() * 1000);
-  const redSwapMs = Math.max(400, Math.round(yellowMs * 0.4));
+  const clearanceSeconds = options && Number.isFinite(options.clearanceSeconds)
+    ? options.clearanceSeconds
+    : (yellowMs * 0.4 / 1000);
+  const redSwapMs = Math.max(400, Math.round(Math.max(0.2, clearanceSeconds) * 1000));
 
   // Step 1: Active lane → WARNING
   if (activeIsNS) {
@@ -287,6 +474,7 @@ function runManualTransition(callback) {
     State.ew = 'warning';
   }
   renderAll();
+  setPhaseCountdown(yellowMs / 1000);
 
   // Step 2: After 1.5s → active lane goes to STOP
   setTimeout(function () {
@@ -298,6 +486,7 @@ function runManualTransition(callback) {
       State.ew = 'stop';
     }
     renderAll();
+    setPhaseCountdown(redSwapMs / 1000);
 
     // Step 3: After 0.6s → waiting lane goes to GO
     setTimeout(function () {
@@ -341,24 +530,25 @@ function runManualTransition(callback) {
         log('🚶 WALK — Pedestrians crossing', 'info');
 
         // Start pedestrian countdown UI (5 → 0)
-        let remaining = 5;
-        setPedestrianSignal(true, remaining);
+        const settings = getTimedSettings();
+        let remaining = settings.pedestrianSeconds;
+        setPedestrianSignal(true, remaining, 'go');
         State.pedInterval = setInterval(function () {
           remaining -= 1;
-          setPedestrianSignal(true, remaining);
+          setPedestrianSignal(true, remaining, 'go');
           if (remaining <= 0) {
             clearInterval(State.pedInterval);
             State.pedInterval = null;
             // End pedestrian signal at zero (stop animation + text)
-            setPedestrianSignal(false, 0);
+            setPedestrianSignal(false, 0, 'stop');
           }
         }, 1000);
 
-        // After 5 seconds, restore traffic and re-enable the button
+        // After configured pedestrian delay, restore traffic and re-enable the button
         setTimeout(function () {
           clearInterval(State.pedInterval);
           State.pedInterval = null;
-          setPedestrianSignal(false, 0);
+          setPedestrianSignal(false, 0, 'stop');
 
           State.ns = nsAfterTransition;
           State.ew = ewAfterTransition;
@@ -367,7 +557,7 @@ function runManualTransition(callback) {
           if (btnPedestrian) {
             btnPedestrian.disabled = false;
           }
-        }, 5000);
+        }, settings.pedestrianSeconds * 1000);
       } else if (btnPedestrian) {
         // Ensure the pedestrian button is enabled when no request is pending
         btnPedestrian.disabled = false;
@@ -385,8 +575,10 @@ function runManualTransition(callback) {
      - After the transition, wait the other lane's go time, repeat
 ───────────────────────────────────────────────────────────── */
 function startTimedMode() {
-  const nsSeconds = parseFloat(nsTimeInput.value) || 10;
-  const ewSeconds = parseFloat(ewTimeInput.value) || 7;
+  const settings = getTimedSettings();
+  const nsSeconds = settings.nsSeconds;
+  const ewSeconds = settings.ewSeconds;
+  const clearanceSeconds = settings.clearanceSeconds;
 
   log('⏱ Timed mode started — N–S: ' + nsSeconds + 's | E–W: ' + ewSeconds + 's', 'info');
 
@@ -397,7 +589,11 @@ function startTimedMode() {
   log('✅ N–S → GO (starting)', 'success');
 
   // Kick off the cycle
-  runTimedCycle(nsSeconds, ewSeconds);
+  runTimedCycle(nsSeconds, ewSeconds, clearanceSeconds);
+  clearTimedPedestrianTimers();
+  State.timedPedRequested = false;
+  State.timedPedPhase = 'stop';
+  runTimedPedestrianCycle(settings, 'stop');
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -405,18 +601,19 @@ function startTimedMode() {
    Internal helper — schedules the next transition after
    the correct go time for the currently active lane.
 ───────────────────────────────────────────────────────────── */
-function runTimedCycle(nsSeconds, ewSeconds) {
+function runTimedCycle(nsSeconds, ewSeconds, clearanceSeconds) {
   // Stop if mode was switched away
   if (State.mode !== 'timed') return;
 
   // How long should the current GO lane stay green?
   const currentGoTime = (State.ns === 'go') ? nsSeconds : ewSeconds;
+  setPhaseCountdown(currentGoTime);
 
   State.timedTimeout = setTimeout(function () {
     runManualTransition(function () {
       // After transition, schedule the next one
-      runTimedCycle(nsSeconds, ewSeconds);
-    });
+      runTimedCycle(nsSeconds, ewSeconds, clearanceSeconds);
+    }, { clearanceSeconds: clearanceSeconds });
   }, currentGoTime * 1000);
 }
 
@@ -426,9 +623,18 @@ function runTimedCycle(nsSeconds, ewSeconds) {
 ───────────────────────────────────────────────────────────── */
 function stopTimedMode() {
   clearTimeout(State.timedTimeout);
+  clearInterval(State.countdownInterval);
+  State.countdownInterval = null;
   State.timedTimeout = null;
   State.transitioning = false;
+  State.phaseEndAt = 0;
+  clearTimedPedestrianTimers();
+  State.timedPedRequested = false;
+  State.timedPedPhase = 'stop';
   btnTransition.disabled = false;
+  if (btnPedestrian) btnPedestrian.disabled = false;
+  renderVehicleCountdowns(0);
+  setPedestrianSignal(false, 0, 'stop');
   log('⏹ Timed mode stopped', 'warning');
 }
 
@@ -444,6 +650,23 @@ btnTransition.addEventListener('click', function () {
 
 // Pedestrian request button
 btnPedestrian.addEventListener('click', function () {
+  if (State.mode === 'timed') {
+    const settings = getTimedSettings();
+    if (State.timedPedPhase === 'stop') {
+      State.timedPedRequested = false;
+      clearTimedPedestrianTimers();
+      runTimedPedestrianCycle(settings, 'go');
+      log('🚶 Pedestrian cycle started in TIMED mode', 'info');
+      return;
+    }
+
+    if (State.timedPedRequested) return;
+    State.timedPedRequested = true;
+    btnPedestrian.disabled = true;
+    log('🚶 Pedestrian request queued — starts on next RED phase', 'info');
+    return;
+  }
+
   if (State.pendingPedestrian) return;
 
   btnPedestrian.disabled = true;

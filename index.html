@@ -25,6 +25,11 @@
 
         <!-- North–South Light -->
         <figure class="traffic-light-unit">
+          <div class="countdown-box" id="ns-countdown-box" aria-live="polite">
+            <div class="countdown-label" id="ns-countdown-label">RED</div>
+            <div class="countdown-value" id="ns-countdown-value">0</div>
+            <div class="countdown-caption" id="ns-countdown-caption">Until green</div>
+          </div>
           <figcaption>
             <span class="lane-label">North–South</span>
             <span class="lane-badge">Main Lane</span>
@@ -43,6 +48,11 @@
         <!-- East–West Light + Pedestrian Signal -->
         <div class="ew-with-ped">
           <figure class="traffic-light-unit">
+            <div class="countdown-box" id="ew-countdown-box" aria-live="polite">
+              <div class="countdown-label" id="ew-countdown-label">GREEN</div>
+              <div class="countdown-value" id="ew-countdown-value">0</div>
+              <div class="countdown-caption" id="ew-countdown-caption">Active</div>
+            </div>
             <figcaption>
               <span class="lane-label">East–West</span>
               <span class="lane-badge">Intersecting Lane</span>
@@ -56,6 +66,11 @@
           </figure>
 
           <figure class="ped-signal" id="ped-signal" aria-label="Pedestrian signal">
+            <div class="countdown-box ped-countdown" id="ped-countdown-box" aria-live="polite">
+              <div class="countdown-label" id="ped-countdown-label">RED</div>
+              <div class="countdown-value" id="ped-countdown-value">0</div>
+              <div class="countdown-caption" id="ped-countdown-caption">Wait</div>
+            </div>
             <div class="ped-lights" aria-hidden="true">
               <div class="ped-bulb ped-red" id="ped-red-light"></div>
               <div class="ped-bulb ped-green" id="ped-green-light"></div>
@@ -81,7 +96,10 @@
           <div class="car car-ns alt" id="car-ns-2" aria-hidden="true"></div>
         </div>
         <div class="crosswalk-strip" id="crosswalk-strip">
-          <span class="road-label ped-label">Pedestrian Crossing (within E–W road)</span>
+          <span class="road-label ped-label">Pedestrian Crossing (intersection)</span>
+          <div class="crosswalk-phase-label" id="crosswalk-phase-label" aria-live="polite">
+            Section: Intersection Crosswalk - RED (Wait)
+          </div>
           <div class="pedestrian-mover" id="ped-1" aria-hidden="true"></div>
           <div class="pedestrian-mover alt" id="ped-2" aria-hidden="true"></div>
           <div class="pedestrian-mover alt-two" id="ped-3" aria-hidden="true"></div>
@@ -105,15 +123,17 @@
           <span class="mode-label" id="label-timed">Timed</span>
         </fieldset>
 
+        <fieldset class="control-group">
+          <legend class="visually-hidden">Pedestrian controls</legend>
+          <button class="btn btn-warning" id="btn-pedestrian">🚶 Pedestrian</button>
+        </fieldset>
+
         <!-- Manual Controls -->
         <fieldset class="control-group" id="manual-controls">
           <legend class="visually-hidden">Manual controls</legend>
           <button class="btn btn-primary" id="btn-transition">
             ⏩ Trigger Transition
           </button>
-        <button class="btn btn-secondary" id="btn-pedestrian">
-          🚶 Pedestrian
-        </button>
         </fieldset>
 
         <!-- Timed Controls -->
@@ -126,6 +146,14 @@
           <div class="timed-input-group">
             <label for="ew-time">E–W Go Time (sec)</label>
             <input type="text" id="ew-time" value="7" placeholder="e.g. 7" />
+          </div>
+          <div class="timed-input-group">
+            <label for="ped-time">Pedestrian Delay (sec)</label>
+            <input type="text" id="ped-time" value="5" placeholder="e.g. 5" />
+          </div>
+          <div class="timed-input-group">
+            <label for="clearance-time">Clearance / Queue (sec)</label>
+            <input type="text" id="clearance-time" value="2" placeholder="e.g. 2" />
           </div>
           <button class="btn btn-success" id="btn-start-timed">▶ Start</button>
           <button class="btn btn-danger"  id="btn-stop-timed">■ Stop</button>
